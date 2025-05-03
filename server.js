@@ -5,42 +5,42 @@ const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server, {
-  cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
-  }
-});
+const io = socketIo(server);
 
-// Serve frontend
+const queue = [];
+
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+app.get('/', (_, res) => {
+  res.sendFile(path.join(__dirname, 'public/index.html'));
 });
 
-let users = [];
-
 io.on('connection', (socket) => {
-  console.log('A user connected:', socket.id);
+  console.log("Connected:", socket.id);
 
-  socket.on('offer', (offer) => {
-    const user = users.find((u) => u.id !== socket.id);
-    if (user) {
-      io.to(user.id).emit('offer', { id: socket.id });
+  socket.on('ready', (peerId) => {
+    socket.peerId = peerId;
+
+    if (queue.length > 0) {
+      const partner = queue.shift();
+      // Tell each user the other's peer ID
+      socket.emit('peerId', partner.peerId);
+      partner.emit('peerId', peerId);
     } else {
-      users.push({ id: socket.id });
+      queue.push(socket);
     }
   });
 
-  socket.on('stop', () => {
-    users = users.filter((user) => user.id !== socket.id);
-    socket.disconnect();
+  socket.on('leave', () => {
+    queue.splice(queue.indexOf(socket), 1);
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    users = users.filter((user) => user.id !== socket.id);
+    console.log("Disconnected:", socket.id);
+    const index = queue.indexOf(socket);
+    if (index !== -1) {
+      queue.splice(index, 1);
+    }
   });
 });
 
