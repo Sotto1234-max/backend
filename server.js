@@ -2,11 +2,24 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const { ExpressPeerServer } = require('peer');
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
+// Setup PeerJS signaling server
+const peerServer = ExpressPeerServer(server, {
+  debug: true,
+  path: '/peerjs',
+  allow_discovery: true
+});
+app.use('/peerjs', peerServer);
+
+// Serve frontend
+app.use(express.static(path.join(__dirname, 'public')));
+
+// 1v1 matchmaking
 let waitingUser = null;
 
 io.on('connection', (socket) => {
@@ -25,7 +38,7 @@ io.on('connection', (socket) => {
 
       waitingUser = null;
     } else {
-      // Wait for a partner
+      // No match yet, wait
       waitingUser = socket;
     }
   });
@@ -52,8 +65,6 @@ io.on('connection', (socket) => {
   });
 });
 
-app.use(express.static(path.join(__dirname, 'public'))); // for frontend
-
 server.listen(3000, () => {
-  console.log('Server running on http://localhost:3000');
+  console.log('✅ Server running on http://localhost:3000');
 });
