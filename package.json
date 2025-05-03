@@ -10,6 +10,6 @@
     "express": "^4.17.1",
     "http": "^0.0.1",
     "socket.io": "^4.0.0",
-    "nodemon": "^2.0.0"  // Optional for development
+    "nodemon": "^2.0.0"
   }
 }
