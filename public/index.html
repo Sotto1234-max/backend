@@ -23,8 +23,8 @@
     <p id="status" class="text-sm font-medium text-gray-700 mb-4">🔄 Waiting...</p>
 
     <div class="flex flex-col items-center space-y-3 mb-4 w-full">
-      <video id="local-video" autoplay muted class="border"></video>
-      <video id="remote-video" autoplay class="border"></video>
+      <video id="local-video" autoplay muted playsinline class="border"></video>
+      <video id="remote-video" autoplay playsinline class="border"></video>
     </div>
 
     <div class="flex flex-col gap-2 w-full">
@@ -67,33 +67,52 @@
         host: peerHost,
         port: window.location.protocol === "https:" ? 443 : 3000,
         path: '/peerjs',
-        secure: window.location.protocol === "https:"
+        secure: window.location.protocol === "https:",
+        config: {
+          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+        },
+        debug: 2
       });
 
       peer.on('open', (id) => {
+        console.log("My peer ID is: " + id);
         socket.emit('join', id);
+      });
 
-        socket.on('match', (otherPeerId) => {
-          statusText.textContent = "🔗 Connected!";
-          const call = peer.call(otherPeerId, localStream);
-          call.on('stream', (remoteStream) => {
-            remoteVideo.srcObject = remoteStream;
-          });
-          currentCall = call;
+      socket.on('match', (otherPeerId) => {
+        console.log("Matched with", otherPeerId);
+        const call = peer.call(otherPeerId, localStream);
+        call.on('stream', (remoteStream) => {
+          remoteVideo.srcObject = remoteStream;
         });
+        call.on('close', () => {
+          console.log("Call closed");
+        });
+        currentCall = call;
+        statusText.textContent = "🔗 Connected!";
       });
 
       peer.on('call', (call) => {
+        console.log("Incoming call from", call.peer);
         call.answer(localStream);
         call.on('stream', (remoteStream) => {
           remoteVideo.srcObject = remoteStream;
+        });
+        call.on('close', () => {
+          console.log("Call closed");
         });
         currentCall = call;
         statusText.textContent = "🔗 Connected!";
       });
 
       peer.on('disconnected', () => {
+        console.log("Peer disconnected");
         statusText.textContent = "❌ Peer disconnected.";
+      });
+
+      peer.on('error', (err) => {
+        console.error("Peer error:", err);
+        statusText.textContent = "⚠️ Peer error: " + err.type;
       });
     }
 
