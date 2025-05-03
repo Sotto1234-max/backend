@@ -7,43 +7,53 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-const PORT = process.env.PORT || 5000;
+let waitingUser = null;
 
-let waitingUsers = [];
+io.on('connection', (socket) => {
+  console.log('User connected');
 
-app.use(express.static(path.join(__dirname, 'public'))); // Serve frontend
+  socket.on('join', (peerId) => {
+    socket.peerId = peerId;
 
-io.on('connection', socket => {
-  console.log('User connected:', socket.id);
+    if (waitingUser) {
+      // Match found
+      socket.partner = waitingUser;
+      waitingUser.partner = socket;
 
-  socket.on('offer', ({ id }) => {
-    socket.peerId = id;
+      waitingUser.emit('match', socket.peerId);
+      socket.emit('match', waitingUser.peerId);
 
-    // If there's a user waiting, match them
-    if (waitingUsers.length > 0) {
-      const partner = waitingUsers.shift();
-      if (partner.connected) {
-        // Tell both users to call each other
-        socket.emit('offer', { id: partner.peerId });
-        partner.emit('offer', { id });
-      }
+      waitingUser = null;
     } else {
-      // No partner yet, wait in queue
-      waitingUsers.push(socket);
+      // Wait for a partner
+      waitingUser = socket;
     }
   });
 
-  socket.on('stop', () => {
-    // Remove from waiting queue if still there
-    waitingUsers = waitingUsers.filter(s => s !== socket);
+  socket.on('leave', () => {
+    if (socket.partner) {
+      socket.partner.emit('leave');
+      socket.partner.partner = null;
+    }
+    if (waitingUser === socket) {
+      waitingUser = null;
+    }
+    socket.partner = null;
   });
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    waitingUsers = waitingUsers.filter(s => s !== socket);
+    if (socket.partner) {
+      socket.partner.emit('leave');
+      socket.partner.partner = null;
+    }
+    if (waitingUser === socket) {
+      waitingUser = null;
+    }
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.use(express.static(path.join(__dirname, 'public'))); // for frontend
+
+server.listen(3000, () => {
+  console.log('Server running on http://localhost:3000');
 });
