@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>1v1 Video Chat</title>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.1/dist/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/peerjs@1.3.1/dist/peerjs.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #video-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+        video {
+            width: 100%;
+            max-width: 400px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <div class="flex flex-col items-center p-5">
+        <h1 class="text-3xl font-bold mb-5">1v1 Video Chat</h1>
+        <div id="video-container" class="mb-5">
+            <video id="local-video" autoplay muted></video>
+            <video id="remote-video" autoplay></video>
+        </div>
+        <div>
+            <button id="startBtn" class="bg-blue-500 text-white px-6 py-2 rounded mb-2" onclick="startCall()">Start</button>
+            <button id="nextBtn" class="bg-green-500 text-white px-6 py-2 rounded mb-2 hidden" onclick="nextCall()">Next</button>
+            <button id="stopBtn" class="bg-red-500 text-white px-6 py-2 rounded mb-2 hidden" onclick="stopCall()">Stop</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io('http://localhost:5000');
+        const startBtn = document.getElementById('startBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const localVideo = document.getElementById('local-video');
+        const remoteVideo = document.getElementById('remote-video');
+
+        let localStream;
+        let peer;
+        let connectedUserId = null;
+
+        // Get local video stream
+        async function getLocalStream() {
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+            } catch (error) {
+                console.error("Error accessing webcam: ", error);
+            }
+        }
+
+        // Start the call
+        async function startCall() {
+            startBtn.classList.add('hidden');
+            nextBtn.classList.remove('hidden');
+            stopBtn.classList.remove('hidden');
+
+            // Create a new peer
+            peer = new Peer();
+
+            peer.on('open', (id) => {
+                socket.emit('offer', { id });
+            });
+
+            peer.on('call', (call) => {
+                call.answer(localStream);
+                call.on('stream', (remoteStream) => {
+                    remoteVideo.srcObject = remoteStream;
+                });
+            });
+
+            // Listen for remote user offer
+            socket.on('offer', (offer) => {
+                connectedUserId = offer.id;
+                const call = peer.call(offer.id, localStream);
+                call.on('stream', (remoteStream) => {
+                    remoteVideo.srcObject = remoteStream;
+                });
+            });
+
+            // ICE candidates exchange
+            peer.on('icecandidate', (candidate) => {
+                socket.emit('ice-candidate', candidate);
+            });
+        }
+
+        // Next call (to connect with another user)
+        function nextCall() {
+            socket.emit('next');
+            resetCall();
+        }
+
+        // Stop the call
+        function stopCall() {
+            socket.emit('stop');
+            resetCall();
+        }
+
+        // Reset call UI and peer connection
+        function resetCall() {
+            localVideo.srcObject = null;
+            remoteVideo.srcObject = null;
+            startBtn.classList.remove('hidden');
+            nextBtn.classList.add('hidden');
+            stopBtn.classList.add('hidden');
+            if (peer) {
+                peer.destroy();
+                peer = null;
+            }
+        }
+
+        // Get local video on page load
+        window.onload = () => {
+            getLocalStream();
+        };
+    </script>
+</body>
+</html>
