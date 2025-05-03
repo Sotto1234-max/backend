@@ -21,7 +21,7 @@
     <h1 class="text-3xl font-extrabold text-indigo-600 mb-2">🎥 1v1 Video Chat</h1>
     <p id="status" class="text-sm font-medium text-gray-700 mb-4">🔄 Waiting...</p>
 
-    <div id="video-container" class="flex flex-col items-center space-y-3 mb-4 w-full">
+    <div class="flex flex-col items-center space-y-3 mb-4 w-full">
       <video id="local-video" autoplay muted class="border"></video>
       <video id="remote-video" autoplay class="border"></video>
     </div>
@@ -46,48 +46,48 @@
     let peer;
     let currentCall = null;
 
-    // PeerJS Configuration
-    const peer = new Peer(undefined, {
-      host: 'backendnode-index-js.onrender.com', // Render অ্যাপের ডোমেইন নাম
-      port: 443,
-      path: '/peerjs',
-      secure: true
-    });
-
-    // Get local media stream (camera + microphone)
     async function getLocalStream() {
       try {
         localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         localVideo.srcObject = localStream;
       } catch (error) {
-        console.error("Error accessing webcam: ", error);
-        alert("Webcam or microphone access denied.");
+        alert("Camera/Microphone permission denied.");
       }
     }
 
-    // Start a call
-    function startCall() {
+    async function startCall() {
       startBtn.classList.add('hidden');
       nextBtn.classList.remove('hidden');
       stopBtn.classList.remove('hidden');
       statusText.textContent = "🔍 Searching for a partner...";
 
-      peer.on('open', (id) => {
-        socket.emit('join', id);  // Join with peer id
+      peer = new Peer(undefined, {
+        host: backendnode-index-js.onrender.com,
+        port: 443,
+        path: '/peerjs',
+        secure: true,
+        config: {
+          iceServers: [
+            { urls: 'stun:stun.l.google.com:19302' }
+          ]
+        }
+      });
 
-        socket.off('match');
+      peer.on('open', (id) => {
+        socket.emit('join', id);
+
         socket.on('match', (otherPeerId) => {
           statusText.textContent = "🔗 Connected!";
-          const call = peer.call(otherPeerId, localStream);
+          const call = peer.call(otherPeerId, localStream); // media পাঠানো হচ্ছে
           call.on('stream', (remoteStream) => {
-            remoteVideo.srcObject = remoteStream;
+            remoteVideo.srcObject = remoteStream; // remote stream বসানো
           });
           currentCall = call;
         });
       });
 
       peer.on('call', (call) => {
-        call.answer(localStream);
+        call.answer(localStream); // caller এর call receive করে উত্তর দিচ্ছে
         call.on('stream', (remoteStream) => {
           remoteVideo.srcObject = remoteStream;
         });
@@ -100,20 +100,17 @@
       });
     }
 
-    // Next Call
     function nextCall() {
       socket.emit('leave');
       resetCall();
-      startCall();
+      startCall(); // আবার নতুন করে শুরু কর
     }
 
-    // Stop Call
     function stopCall() {
       socket.emit('leave');
       resetCall();
     }
 
-    // Reset Call state
     function resetCall() {
       if (currentCall) {
         currentCall.close();
@@ -123,13 +120,10 @@
         peer.destroy();
         peer = null;
       }
-
       remoteVideo.srcObject = null;
-
       startBtn.classList.remove('hidden');
       nextBtn.classList.add('hidden');
       stopBtn.classList.add('hidden');
-
       statusText.textContent = "❌ Disconnected.";
       setTimeout(() => {
         statusText.textContent = "🔄 Waiting...";
@@ -137,7 +131,7 @@
     }
 
     window.onload = async () => {
-      await getLocalStream(); // Load local stream first
+      await getLocalStream(); // আগে local video/audio stream নেওয়া
     };
   </script>
 </body>
