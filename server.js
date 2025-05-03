@@ -6,29 +6,32 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: '*', // Allow all domains
+    methods: ['GET', 'POST'],
   }
 });
 
 app.get('/', (req, res) => {
-  res.send('Video Chat Backend Running');
+  res.send('1v1 Video Chat Backend Running');
 });
 
 let users = [];
 
 io.on('connection', (socket) => {
-  console.log('a user connected');
+  console.log('A user connected:', socket.id);
 
+  // When an offer is sent from a user, find a user to connect to
   socket.on('offer', (offer) => {
+    // Try to find a user to connect with
     const user = users.find((u) => u.id !== socket.id);
     if (user) {
-      io.to(user.id).emit('offer', offer);
+      io.to(user.id).emit('offer', { id: socket.id });
     } else {
       users.push({ id: socket.id });
     }
   });
 
+  // When the user sends an answer, forward it to the other user
   socket.on('answer', (answer) => {
     const user = users.find((u) => u.id !== socket.id);
     if (user) {
@@ -36,6 +39,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // ICE candidate exchange
   socket.on('ice-candidate', (candidate) => {
     const user = users.find((u) => u.id !== socket.id);
     if (user) {
@@ -43,13 +47,16 @@ io.on('connection', (socket) => {
     }
   });
 
+  // When the user wants to stop the call
   socket.on('stop', () => {
+    // Remove the user from the list and disconnect
     users = users.filter((user) => user.id !== socket.id);
     socket.disconnect();
   });
 
+  // Handle disconnection
   socket.on('disconnect', () => {
-    console.log('user disconnected');
+    console.log('User disconnected:', socket.id);
     users = users.filter((user) => user.id !== socket.id);
   });
 });
