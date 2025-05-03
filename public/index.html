@@ -52,6 +52,7 @@
         localVideo.srcObject = localStream;
       } catch (error) {
         console.error("Error accessing webcam: ", error);
+        alert("Webcam or microphone access denied.");
       }
     }
 
@@ -59,30 +60,36 @@
       startBtn.classList.add('hidden');
       nextBtn.classList.remove('hidden');
       stopBtn.classList.remove('hidden');
-      statusText.textContent = "🔄 Searching for partner...";
+      statusText.textContent = "🔍 Searching for a partner...";
 
       peer = new Peer();
 
       peer.on('open', (id) => {
+        // Prevent duplicate listeners
+        socket.off('offer');
         socket.emit('offer', { id });
+
+        socket.on('offer', (offer) => {
+          statusText.textContent = "🔗 Connected!";
+          const call = peer.call(offer.id, localStream);
+          call.on('stream', (remoteStream) => {
+            remoteVideo.srcObject = remoteStream;
+          });
+          currentCall = call;
+        });
       });
 
       peer.on('call', (call) => {
         call.answer(localStream);
-        currentCall = call;
         call.on('stream', (remoteStream) => {
           remoteVideo.srcObject = remoteStream;
-          statusText.textContent = "✅ Connected!";
         });
+        currentCall = call;
+        statusText.textContent = "🔗 Connected!";
       });
 
-      socket.on('offer', (offer) => {
-        const call = peer.call(offer.id, localStream);
-        currentCall = call;
-        call.on('stream', (remoteStream) => {
-          remoteVideo.srcObject = remoteStream;
-          statusText.textContent = "✅ Connected!";
-        });
+      peer.on('disconnected', () => {
+        statusText.textContent = "❌ Peer disconnected.";
       });
     }
 
@@ -98,11 +105,15 @@
     }
 
     function resetCall() {
-      if (currentCall) currentCall.close();
-      if (peer) peer.destroy();
+      if (currentCall) {
+        currentCall.close();
+        currentCall = null;
+      }
+      if (peer) {
+        peer.destroy();
+        peer = null;
+      }
 
-      currentCall = null;
-      peer = null;
       remoteVideo.srcObject = null;
 
       startBtn.classList.remove('hidden');
@@ -110,7 +121,6 @@
       stopBtn.classList.add('hidden');
 
       statusText.textContent = "❌ Disconnected.";
-
       setTimeout(() => {
         statusText.textContent = "🔄 Waiting...";
       }, 1500);
