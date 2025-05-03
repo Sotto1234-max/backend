@@ -9,12 +9,13 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // Setup PeerJS signaling server
+const { ExpressPeerServer } = require('peer');
 const peerServer = ExpressPeerServer(server, {
   debug: true,
-  path: '/peerjs',
-  allow_discovery: true
+  path: '/peerjs'
 });
-app.use('/peerjs', peerServer);
+app.use('/peerjs', peerServer); // must be before app.use(express.static(...))
+
 
 // Serve frontend
 app.use(express.static(path.join(__dirname, 'public')));
