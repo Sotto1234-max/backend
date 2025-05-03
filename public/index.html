@@ -56,7 +56,7 @@
       }
     }
 
-    async function startCall() {
+    function startCall() {
       startBtn.classList.add('hidden');
       nextBtn.classList.remove('hidden');
       stopBtn.classList.remove('hidden');
@@ -65,13 +65,12 @@
       peer = new Peer();
 
       peer.on('open', (id) => {
-        // Prevent duplicate listeners
-        socket.off('offer');
-        socket.emit('offer', { id });
+        socket.emit('join', id);
 
-        socket.on('offer', (offer) => {
+        socket.off('match');
+        socket.on('match', (otherPeerId) => {
           statusText.textContent = "🔗 Connected!";
-          const call = peer.call(offer.id, localStream);
+          const call = peer.call(otherPeerId, localStream);
           call.on('stream', (remoteStream) => {
             remoteVideo.srcObject = remoteStream;
           });
@@ -94,13 +93,13 @@
     }
 
     function nextCall() {
-      socket.emit('stop');
+      socket.emit('leave');
       resetCall();
       startCall();
     }
 
     function stopCall() {
-      socket.emit('stop');
+      socket.emit('leave');
       resetCall();
     }
 
