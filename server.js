@@ -1,51 +1,49 @@
 const express = require('express');
 const http = require('http');
-const socketIo = require('socket.io');
+const { Server } = require('socket.io');
 const path = require('path');
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = new Server(server);
 
-const queue = [];
+const PORT = process.env.PORT || 5000;
 
-app.use(express.static(path.join(__dirname, 'public')));
+let waitingUsers = [];
 
-app.get('/', (_, res) => {
-  res.sendFile(path.join(__dirname, 'public/index.html'));
-});
+app.use(express.static(path.join(__dirname, 'public'))); // Serve frontend
 
-io.on('connection', (socket) => {
-  console.log("Connected:", socket.id);
+io.on('connection', socket => {
+  console.log('User connected:', socket.id);
 
-  socket.on('ready', (peerId) => {
-    socket.peerId = peerId;
+  socket.on('offer', ({ id }) => {
+    socket.peerId = id;
 
-    if (queue.length > 0) {
-      const partner = queue.shift();
-      // Tell each user the other's peer ID
-      socket.emit('peerId', partner.peerId);
-      partner.emit('peerId', peerId);
+    // If there's a user waiting, match them
+    if (waitingUsers.length > 0) {
+      const partner = waitingUsers.shift();
+      if (partner.connected) {
+        // Tell both users to call each other
+        socket.emit('offer', { id: partner.peerId });
+        partner.emit('offer', { id });
+      }
     } else {
-      queue.push(socket);
+      // No partner yet, wait in queue
+      waitingUsers.push(socket);
     }
   });
 
-  socket.on('leave', () => {
-    queue.splice(queue.indexOf(socket), 1);
+  socket.on('stop', () => {
+    // Remove from waiting queue if still there
+    waitingUsers = waitingUsers.filter(s => s !== socket);
   });
 
   socket.on('disconnect', () => {
-    console.log("Disconnected:", socket.id);
-    const index = queue.indexOf(socket);
-    if (index !== -1) {
-      queue.splice(index, 1);
-    }
+    console.log('User disconnected:', socket.id);
+    waitingUsers = waitingUsers.filter(s => s !== socket);
   });
 });
 
-const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);
 });
- 
