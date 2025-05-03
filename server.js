@@ -9,7 +9,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // Setup PeerJS signaling server
-const { ExpressPeerServer } = require('peer');
+
 const peerServer = ExpressPeerServer(server, {
   debug: true,
   path: '/peerjs'
